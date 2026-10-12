@@ -1,0 +1,208 @@
+{
+  "name": "02-rss-security-news",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -864,
+        -16
+      ],
+      "id": "29f8f6f7-6dad-4746-9d2e-175a5d731952",
+      "name": "Manual trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://www.bleepingcomputer.com/feed/",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -704,
+        -16
+      ],
+      "id": "400b7f49-1b33-4b13-88a9-1aca9ffc2dc4",
+      "name": "Read security feed"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e291c245-ea9c-4d9a-881a-effb2450f2ee",
+              "leftValue": "={{ /ransomware|phishing|vulnerability|zero-day|breach|exploit|attack|malware|CVE/i.test($json.title) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        -544,
+        -16
+      ],
+      "id": "fcccf081-db6c-493d-8162-7e2fd311d543",
+      "name": "Filter by keywords"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f29a838e-1b9d-4d8b-9733-1e1de0758938",
+              "name": "title",
+              "value": "={{ $json.title }}",
+              "type": "string"
+            },
+            {
+              "id": "796587e7-5a6f-4162-8abf-fd07ce13c84b",
+              "name": "link",
+              "value": "={{ $json.link }}",
+              "type": "string"
+            },
+            {
+              "id": "eecd0cc3-dd5a-4d6e-a5cb-e9055f16821e",
+              "name": "pubDate",
+              "value": "={{ $json.pubDate }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -368,
+        -16
+      ],
+      "id": "ebb035b8-c9f3-487d-b8e3-04405c2a2781",
+      "name": "Keep useful fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst lines = items.map((item, i) =>\n  `${i + 1}. ${item.json.title}\\n   ${item.json.link}`\n);\n\nreturn [{\n  json: {\n    subject: `Security news digest (${items.length} articles)`,\n    body: lines.join('\\n\\n')\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -192,
+        -16
+      ],
+      "id": "169ac9ac-cdf5-43e8-972d-ce26d7456321",
+      "name": "Build digest"
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-email@example.com",
+        "toEmail": "your-email@example.com",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        -16
+      ],
+      "id": "e559ab2e-135c-4b16-8fa7-a42cc821c993",
+      "name": "Send digest email",
+      "webhookId": "c8b407b8-0703-40ed-bf15-3267d887ed05",
+      "credentials": {
+        "smtp": {
+          "id": "TkDAG1cSEtTXQ3TQ",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual trigger": {
+      "main": [
+        [
+          {
+            "node": "Read security feed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read security feed": {
+      "main": [
+        [
+          {
+            "node": "Filter by keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter by keywords": {
+      "main": [
+        [
+          {
+            "node": "Keep useful fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep useful fields": {
+      "main": [
+        [
+          {
+            "node": "Build digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build digest": {
+      "main": [
+        [
+          {
+            "node": "Send digest email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "538d56ab-2d23-4ee3-9b79-a36e9d5acbea",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "48ce6168b5f71f9f05efa702e4129c1197ca600fc9c0506b812a95ad16ec2713"
+  },
+  "nodeGroups": [],
+  "id": "2HgahPap8vvQzCDX",
+  "tags": []
+}
