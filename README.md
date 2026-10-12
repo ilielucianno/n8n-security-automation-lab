@@ -6,6 +6,8 @@ Automation workflows for security operations, built with n8n and self-hosted in 
 
 ### 01 - RSS Security News Digest
 
+![RSS security digest workflow](workflow-screenshot.png)
+
 File: `rss-security-digest.json`
 
 Reads a security news feed, keeps only articles that match security keywords, and emails a single digest.
