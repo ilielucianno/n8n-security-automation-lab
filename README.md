@@ -44,10 +44,11 @@ Notes:
 ## Run it yourself
 
 1. Start n8n with Docker Compose, bound to localhost only (`127.0.0.1:5678`)
-2. In n8n, import `rss-security-digest.json` (workflow menu, then Import)
-3. Create your own SMTP credential (for Gmail, use an app password)
-4. Replace `your-email@example.com` in the Send digest email node with your address
-5. Run the workflow
+2. In n8n, import a workflow JSON from this repo (workflow menu, then Import)
+3. Create your own SMTP credential (for Gmail, use an app password without spaces)
+4. For workflow 02, also create a Google Gemini credential with a free API key from Google AI Studio
+5. Replace `your-email@example.com` in the Send digest email node with your address
+6. Run the workflow
 
 ## Security notes
 
