@@ -1,0 +1,268 @@
+{
+  "name": "04-rss-security-digest",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1184,
+        -16
+      ],
+      "id": "e6cd009b-5aaa-46f6-b5cf-8163482e139e",
+      "name": "Manual trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://www.bleepingcomputer.com/feed/",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -992,
+        -16
+      ],
+      "id": "b86f1439-e614-4087-87ec-aee9682bfb73",
+      "name": "Read security feed"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e291c245-ea9c-4d9a-881a-effb2450f2ee",
+              "leftValue": "={{ /ransomware|phishing|vulnerability|zero-day|breach|exploit|attack|malware|CVE/i.test($json.title) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        -816,
+        -16
+      ],
+      "id": "5a2be0a1-25f1-4a11-a70b-201568446e47",
+      "name": "Filter by keywords"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f29a838e-1b9d-4d8b-9733-1e1de0758938",
+              "name": "title",
+              "value": "={{ $json.title }}",
+              "type": "string"
+            },
+            {
+              "id": "796587e7-5a6f-4162-8abf-fd07ce13c84b",
+              "name": "link",
+              "value": "={{ $json.link }}",
+              "type": "string"
+            },
+            {
+              "id": "eecd0cc3-dd5a-4d6e-a5cb-e9055f16821e",
+              "name": "pubDate",
+              "value": "={{ $json.pubDate }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -640,
+        -16
+      ],
+      "id": "64f97dd0-6b97-4483-a5cd-965c4afc044f",
+      "name": "Keep useful fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst lines = items.map((item, i) =>\n  `${i + 1}. ${item.json.title}\\n   ${item.json.link}`\n);\n\nreturn [{\n  json: {\n    subject: `Security news digest (${items.length} articles)`,\n    body: lines.join('\\n\\n')\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        -16
+      ],
+      "id": "4f2dc638-07a2-49e4-a452-4a77cdb1dafd",
+      "name": "Build digest"
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-email@example.com",
+        "toEmail": "your-email@example.com",
+        "subject": "={{ $('Build digest').item.json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        32,
+        -16
+      ],
+      "id": "a76897c1-fee6-4294-bc06-b126831d9ecd",
+      "name": "Send digest email",
+      "webhookId": "80c4a0bd-afbd-44b3-b0b1-5c42e6ebe09c",
+      "credentials": {
+        "smtp": {
+          "id": "TkDAG1cSEtTXQ3TQ",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a security analyst. Below are today's security news articles (title and link). Write a short briefing for a network security engineer:\n1. Start with the 3 most important items, each with one sentence on why it matters.\n2. Then list the remaining articles as one-line bullets.\nKeep the links. Plain text only, no markdown.\n\nArticles:\n{{ $json.body }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -272,
+        -16
+      ],
+      "id": "de5ba1b2-9634-4394-b0ad-44e8d5c8c696",
+      "name": "Basic LLM Chain",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.8-flash",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        -352,
+        192
+      ],
+      "id": "3917101b-37c1-4f08-bece-76382e2bd67d",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "LQvISUXSp4MG8HoP",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual trigger": {
+      "main": [
+        [
+          {
+            "node": "Read security feed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read security feed": {
+      "main": [
+        [
+          {
+            "node": "Filter by keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter by keywords": {
+      "main": [
+        [
+          {
+            "node": "Keep useful fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep useful fields": {
+      "main": [
+        [
+          {
+            "node": "Build digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build digest": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Send digest email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "0b88aa7f-eed8-4996-aeef-79a6946ed193",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "48ce6168b5f71f9f05efa702e4129c1197ca600fc9c0506b812a95ad16ec2713"
+  },
+  "nodeGroups": [],
+  "id": "dAPeEr4vHW3LdZJd",
+  "tags": []
+}
