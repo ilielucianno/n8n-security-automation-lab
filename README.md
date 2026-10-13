@@ -23,6 +23,24 @@ Pipeline:
 
 Example run: 15 articles read, 10 kept by the filter, 1 digest email sent.
 
+### 02 - AI Security Digest (Gemini)
+
+File: `ai-security-digest.json`
+
+Same pipeline as workflow 01, with an AI step. Instead of a plain list, Google Gemini writes a short briefing for a network security engineer: the 3 most important articles first, each with a one-line "why it matters", then the remaining articles as short bullets with links.
+
+Pipeline:
+
+1. **Manual trigger**, **Read security feed**, **Filter by keywords**, **Keep useful fields**, **Build digest** (same as workflow 01)
+2. **Basic LLM Chain** with a Google Gemini chat model writes the briefing from the digest
+3. **Send digest email** sends the briefing over SMTP
+
+Notes:
+
+- Requires a free Gemini API key from Google AI Studio, added as a credential in n8n.
+- Retry On Fail is enabled on the LLM node (5 tries, 5 seconds apart), because the free tier regularly returns 503 errors during high demand.
+- Only public data (news headlines and links) is sent to the model. Internal logs or company data should never go to a free-tier API.
+
 ## Run it yourself
 
 1. Start n8n with Docker Compose, bound to localhost only (`127.0.0.1:5678`)
