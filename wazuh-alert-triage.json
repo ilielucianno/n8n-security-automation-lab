@@ -59,7 +59,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const text = $input.first().json.text || '';\nconst get = (key) => {\n  const m = text.match(new RegExp('^' + key + ':\\\\s*(.+)$', 'mi'));\n  return m ? m[1].trim() : '';\n};\nconst alert = $('Webhook').first().json.body;\n\nlet severity = get('SEVERITY').toLowerCase();\nif (!['low', 'medium', 'high'].includes(severity)) severity = 'unknown';\n\nreturn [{\n  json: {\n    severity,\n    ai_ok: text.length > 0,\n    category: get('CATEGORY') || 'AI triage unavailable',\n    summary: get('SUMMARY') || 'AI triage failed. Review the original alert manually.',\n    false_positive: get('LIKELY_FALSE_POSITIVE') || 'unknown',\n    action: get('RECOMMENDED_ACTION') || 'Review the alert in the Wazuh dashboard.',\n    agent: alert?.agent?.name || '',\n    rule_id: alert?.rule?.id || '',\n    rule_level: alert?.rule?.level || 0,\n    rule_description: alert?.rule?.description || ''\n  }\n}];"
+        "jsCode": "const text = $input.first().json.text || '';\nconst get = (key) => {\n  const m = text.match(new RegExp('^' + key + ':\\\\s*(.+)$', 'mi'));\n  return m ? m[1].trim() : '';\n};\nconst alert = $('Webhook').first().json.body || {};\nconst level = Number(alert?.rule?.level) || 0;\n\n// 1) What the model said\nlet aiSeverity = get('SEVERITY').toLowerCase();\nif (!['low', 'medium', 'high'].includes(aiSeverity)) aiSeverity = 'unknown';\n\n// 2) Checks that do not depend on the model: prompt-injection patterns in\n//    the fields an attacker can control (alert data and full_log)\nconst strings = [];\nconst walk = (v) => {\n  if (typeof v === 'string') strings.push(v);\n  else if (v && typeof v === 'object') Object.values(v).forEach(walk);\n};\nwalk(alert.data);\nwalk(alert.full_log);\n\nconst formatSpoof = /^\\s*(SEVERITY|CATEGORY|SUMMARY|LIKELY_FALSE_POSITIVE|RECOMMENDED_ACTION)\\s*:/im;\nconst phrases = /ignore (all )?(the )?(previous|above)|system note|disregard|new instructions|you are now/i;\nconst injectionSuspected = strings.some((s) => formatSpoof.test(s) || phrases.test(s));\n\n// 3) The model may not hide a serious or suspicious alert\nlet severity = aiSeverity;\nconst overridden = severity === 'low' && (injectionSuspected || level >= 10);\nif (overridden) severity = 'medium';\n\nreturn [{\n  json: {\n    severity,\n    severity_ai: aiSeverity,\n    overridden,\n    injection_suspected: injectionSuspected,\n    ai_ok: text.length > 0,\n    category: get('CATEGORY') || 'AI triage unavailable',\n    summary: get('SUMMARY') || 'AI triage failed. Review the original alert manually.',\n    false_positive: get('LIKELY_FALSE_POSITIVE') || 'unknown',\n    action: get('RECOMMENDED_ACTION') || 'Review the alert in the Wazuh dashboard.',\n    agent: alert?.agent?.name || '',\n    rule_id: alert?.rule?.id || '',\n    rule_level: alert?.rule?.level || 0,\n    rule_description: alert?.rule?.description || ''\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -74,9 +74,9 @@
       "parameters": {
         "fromEmail": "your-email@example.com",
         "toEmail": "your-email@example.com",
-        "subject": "=[Wazuh {{ $json.severity.toUpperCase() }}] {{ $json.category }} on {{ $json.agent }}",
+        "subject": "=[Wazuh {{ $json.severity.toUpperCase() }}]{{ $json.injection_suspected ? ' [INJECTION SUSPECTED]' : '' }} {{ $json.category }} on {{ $json.agent }}",
         "emailFormat": "text",
-        "text": "=Severity: {{ $json.severity }}\nCategory: {{ $json.category }}\nAgent: {{ $json.agent }}\nRule: {{ $json.rule_id }} (level {{ $json.rule_level }}) - {{ $json.rule_description }}\n\nSummary:\n{{ $json.summary }}\n\nLikely false positive:\n{{ $json.false_positive }}\n\nRecommended action:\n{{ $json.action }}",
+        "text": "={{ $json.injection_suspected ? 'WARNING: the alert contains text that looks like an attempt to manipulate the AI triage. Do not trust the AI fields below. Review the original alert in Wazuh.\\n\\n' : '' }}{{ $json.overridden ? 'NOTE: the AI classified this as low, but severity was raised by an automatic rule (level >= 10 or suspected injection).\\n\\n' : '' }}Severity: {{ $json.severity }}\nCategory: {{ $json.category }}\nAgent: {{ $json.agent }}\nRule: {{ $json.rule_id }} (level {{ $json.rule_level }}) - {{ $json.rule_description }}\n\nSummary:\n{{ $json.summary }}\n\nLikely false positive:\n{{ $json.false_positive }}\n\nRecommended action:\n{{ $json.action }}",
         "options": {}
       },
       "type": "n8n-nodes-base.emailSend",
@@ -130,7 +130,7 @@
     },
     {
       "parameters": {
-        "modelName": "models/gemini-3.5-flash-lite",
+        "modelName": "models/gemma-4-31b-it",
         "options": {}
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
@@ -149,48 +149,7 @@
       }
     }
   ],
-  "pinData": {
-    "Webhook": [
-      {
-        "json": {
-          "headers": {
-            "host": "localhost:5678",
-            "user-agent": "curl/8.18.0",
-            "accept": "*/*",
-            "content-type": "application/json",
-            "content-length": "272"
-          },
-          "params": {},
-          "query": {},
-          "body": {
-            "rule": {
-              "id": "60122",
-              "level": 5,
-              "description": "Logon failure - Unknown user or bad password"
-            },
-            "agent": {
-              "name": "win-host",
-              "ip": "203.0.113.10"
-            },
-            "data": {
-              "win": {
-                "eventdata": {
-                  "targetUserName": "test-user",
-                  "ipAddress": "203.0.113.45"
-                }
-              }
-            },
-            "timestamp": "2026-10-15T10:25:00.000+0300"
-          },
-          "webhookUrl": "http://localhost:5678/webhook-test/wazuh-alert",
-          "executionMode": "test"
-        },
-        "pairedItem": {
-          "item": 0
-        }
-      }
-    ]
-  },
+  "pinData": {},
   "connections": {
     "Webhook": {
       "main": [
@@ -264,7 +223,7 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "f1539e57-f156-4ec2-a16e-82ec91402798",
+  "versionId": "7ff41fed-10c1-41c1-bc9a-4243a2afd56f",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "48ce6168b5f71f9f05efa702e4129c1197ca600fc9c0506b812a95ad16ec2713"
