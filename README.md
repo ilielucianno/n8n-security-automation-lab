@@ -52,10 +52,12 @@ Receives alerts from a self-hosted Wazuh manager, has an LLM triage each one, an
 Pipeline:
 
 1. **Webhook** receives the alert JSON, sent by a custom Wazuh integration (throttled, level 8 and above)
-2. **Basic LLM Chain** (Gemini as primary model, Gemma as fallback from a different model family) returns severity, category, a one-sentence summary, a likely false positive verdict and a recommended action. The prompt tells the model to treat alert content as untrusted data
-3. **Parse triage** (JavaScript) turns the answer into separate fields and applies checks that do not depend on the model: an alert of level 10 or higher can never end up as `low`, and text in the alert that looks like an injection attempt also prevents `low`. If the AI call fails, severity becomes `unknown`
-4. **Needs attention?** passes every alert except `low`
-5. **Send triage email** sends the triage over SMTP. If an injection is suspected, the subject and the body carry a warning not to trust the AI fields
+2. **Enrich alert** (JavaScript) classifies the source IP as internal (private, RFC1918) or external before triage, and passes the result to the model as an authoritative fact, so a private IP is never mislabelled as an external attacker
+3. **Basic LLM Chain** (Gemini as primary model, Gemma as fallback from a different model family, both at temperature 0) returns severity, category, a one-sentence summary, a likely false positive verdict and a recommended action. The prompt tells the model to treat alert content as untrusted data and to use the computed IP scope instead of guessing it
+4. **Parse triage** (JavaScript) turns the answer into separate fields and applies checks that do not depend on the model: an alert of level 10 or higher can never end up as `low`, and text in the alert that looks like an injection attempt also prevents `low`. If the AI call fails, severity becomes `unknown`
+5. **Dedup** (JavaScript) suppresses repeat emails for the same event within a 30-minute window. The fingerprint uses deterministic fields only (rule id, agent, source IP), never AI-derived fields, and the window is kept in workflow static data
+6. **Needs attention?** passes an alert only when it is not `low` and not a duplicate
+7. **Send triage email** sends the triage over SMTP, including the source IP and its scope. If an injection is suspected, the subject and the body carry a warning not to trust the AI fields
 
 Design decisions:
 
@@ -64,6 +66,8 @@ Design decisions:
 - Throttling lives in the Wazuh integration, not in n8n. The reasoning is in the integration README.
 - The threshold is level 8. At level 5, one Windows host produced over 2,000 alerts in a single day, mostly audit failures and registry integrity events.
 - The workflow only sends email. There are no automated response actions, a human decides.
+- Both models run at temperature 0, so the same alert produces the same verdict. Before this, the same event could flip between "false positive: yes" and "no" across runs, most often when the fallback model answered.
+- Deterministic facts are computed in code, not left to the model: the source IP scope (RFC1918) and the deduplication fingerprint are both plain JavaScript. The model is left only the fuzzy judgement, and a benign signature that repeats (for example a Windows `sdbinst.exe -m -bg` maintenance event) no longer sends an email every time it fires.
 
 Test: creating, changing and deleting a local Windows test account produced 3 forwarded alerts and 3 triage emails. Running the integration script 3 times with the same alert sent 1 request.
 
@@ -89,5 +93,6 @@ Test: creating, changing and deleting a local Windows test account produced 3 fo
 
 - Phishing email triage agent
 - More security testing of my own agents: repeated runs per attack and per model, testing the primary model, least privilege, logging
-- Alert enrichment (IP reputation) before triage, and a human approval step for response actions
+- Alert enrichment before triage: internal/external (RFC1918) classification is done; an IP reputation lookup is still to do
+- A human approval step for response actions
 - Local model option, so alert data never leaves the lab
